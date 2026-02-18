@@ -14,23 +14,23 @@ A comprehensive GitHub Action for building Docker images with support for multi-
 
 ## Inputs
 
-| Input | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `context` | No | `.` | Build context path |
-| `dockerfile` | No | `Dockerfile` | Path to Dockerfile |
-| `app-name` | No | Repository name | Application name (automatically uses repository name if not provided) |
-| `tag` | No | Auto-detected | Image tag (automatically determined from git ref/SHA if not provided) |
-| `image-name` | No | - | Full image name with tag (e.g., `myapp:latest`). If provided, overrides `app-name` and `tag` |
-| `build-args` | No | - | Build arguments in KEY=VALUE format, one per line |
-| `platforms` | No | - | Target platforms for multi-platform builds (e.g., `linux/amd64,linux/arm64`) |
-| `cache-from` | No | - | External cache sources (e.g., `type=registry,ref=user/app:cache`) |
-| `cache-to` | No | - | Cache export destination (e.g., `type=registry,ref=user/app:cache,mode=max`) |
-| `push` | No | `false` | Push the image after building (requires docker login) |
-| `load` | No | `true` | Load the image into docker daemon (cannot be used with multi-platform builds) |
-| `labels` | No | - | Image labels in KEY=VALUE format, one per line |
-| `target` | No | - | Target build stage (for multi-stage builds) |
-| `no-cache` | No | `false` | Do not use cache when building the image |
-| `pull` | No | `false` | Always attempt to pull a newer version of the base image |
+| Name | Required | Default | Description |
+|------|----------|---------|-------------|
+| `context` | ✗ | `.` | Build context path |
+| `dockerfile` | ✗ | `Dockerfile` | Path to Dockerfile |
+| `app-name` | ✗ | Repository name | Application name (automatically uses repository name if not provided) |
+| `tag` | ✗ | Auto-detected | Image tag (automatically determined from git ref/SHA if not provided) |
+| `image-name` | ✗ | - | Full image name with tag (e.g., `myapp:latest`). If provided, overrides `app-name` and `tag` |
+| `build-args` | ✗ | - | Build arguments in KEY=VALUE format, one per line |
+| `platforms` | ✗ | - | Target platforms for multi-platform builds (e.g., `linux/amd64,linux/arm64`) |
+| `cache-from` | ✗ | - | External cache sources (e.g., `type=registry,ref=user/app:cache`) |
+| `cache-to` | ✗ | - | Cache export destination (e.g., `type=registry,ref=user/app:cache,mode=max`) |
+| `push` | ✗ | `false` | Push the image after building (requires docker login) |
+| `load` | ✗ | `true` | Load the image into docker daemon (cannot be used with multi-platform builds) |
+| `labels` | ✗ | - | Image labels in KEY=VALUE format, one per line |
+| `target` | ✗ | - | Target build stage (for multi-stage builds) |
+| `no-cache` | ✗ | `false` | Do not use cache when building the image |
+| `pull` | ✗ | `false` | Always attempt to pull a newer version of the base image |
 
 ### Smart Defaults
 
@@ -194,49 +194,65 @@ Build using a Dockerfile in a different location:
 
 ## Complete Workflow Example
 
-Here's a complete example that builds and pushes an image:
+Here's a complete example that builds and pushes an image to IBM Cloud Container Registry:
 
 ```yaml
-name: Build and Push Docker Image
+name: Build and Push to IBM Cloud Container Registry
 
 on:
   push:
     branches: [main]
     tags: ['v*']
 
+env:
+  IBM_CLOUD_API_KEY: ${{ secrets.IBM_CLOUD_API_KEY }}
+  IBM_CLOUD_REGION: us-south
+  IBM_CLOUD_NAMESPACE: my-namespace
+
 jobs:
-  build:
+  build-and-push:
     runs-on: ubuntu-latest
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-      
-      - name: Build and push
+      - name: Build Docker image
         id: build
         uses: ./docker-build-action
         with:
           platforms: linux/amd64,linux/arm64
-          push: true
-          cache-from: type=registry,ref=myusername/${{ github.event.repository.name }}:cache
-          cache-to: type=registry,ref=myusername/${{ github.event.repository.name }}:cache,mode=max
           build-args: |
             COMMIT_SHA=${{ github.sha }}
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+          labels: |
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.revision=${{ github.sha }}
+      
+      - name: Push to IBM Cloud Container Registry
+        uses: ../  # Path to ibmcloud-cr-action
+        with:
+          apikey: ${{ env.IBM_CLOUD_API_KEY }}
+          image: ${{ env.IBM_CLOUD_REGION }}.icr.io/${{ env.IBM_CLOUD_NAMESPACE }}/${{ steps.build.outputs.image-name }}
+          local-image: ${{ steps.build.outputs.image-name }}
+          action: push
+          scan: true
+          region: ${{ env.IBM_CLOUD_REGION }}
       
       - name: Display build info
         run: |
           echo "Built image: ${{ steps.build.outputs.image-name }}"
           echo "App name: ${{ steps.build.outputs.app-name }}"
           echo "Tag: ${{ steps.build.outputs.tag }}"
+          echo "Registry: ${{ env.IBM_CLOUD_REGION }}.icr.io/${{ env.IBM_CLOUD_NAMESPACE }}/${{ steps.build.outputs.image-name }}"
 ```
 
-Note: This simplified example uses automatic app name and tag detection, eliminating the need for the `docker/metadata-action`.
+This example demonstrates:
+- **Automatic naming** - Uses repository name and git-based tag
+- **Multi-platform build** - Builds for amd64 and arm64
+- **IBM Cloud integration** - Pushes to IBM Cloud Container Registry with API key in env
+- **Vulnerability scanning** - Scans image after push
+- **Build outputs** - Uses action outputs for subsequent steps
 
 ## Integration with IBM Cloud Container Registry
 
@@ -276,3 +292,5 @@ This action works seamlessly with the IBM Cloud Container Registry action. See t
 ## License
 
 This project is licensed under the MIT License.
+
+# Made with Bob

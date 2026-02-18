@@ -16,21 +16,21 @@ A comprehensive GitHub Action for building Docker images with support for multi-
 
 | Name | Required | Default | Description |
 |------|----------|---------|-------------|
-| `context` | ✗ | `.` | Build context path |
-| `dockerfile` | ✗ | `Dockerfile` | Path to Dockerfile |
-| `app-name` | ✗ | Repository name | Application name (automatically uses repository name if not provided) |
-| `tag` | ✗ | Auto-detected | Image tag (automatically determined from git ref/SHA if not provided) |
-| `image-name` | ✗ | - | Full image name with tag (e.g., `myapp:latest`). If provided, overrides `app-name` and `tag` |
-| `build-args` | ✗ | - | Build arguments in KEY=VALUE format, one per line |
-| `platforms` | ✗ | - | Target platforms for multi-platform builds (e.g., `linux/amd64,linux/arm64`) |
-| `cache-from` | ✗ | - | External cache sources (e.g., `type=registry,ref=user/app:cache`) |
-| `cache-to` | ✗ | - | Cache export destination (e.g., `type=registry,ref=user/app:cache,mode=max`) |
-| `push` | ✗ | `false` | Push the image after building (requires docker login) |
-| `load` | ✗ | `true` | Load the image into docker daemon (cannot be used with multi-platform builds) |
-| `labels` | ✗ | - | Image labels in KEY=VALUE format, one per line |
-| `target` | ✗ | - | Target build stage (for multi-stage builds) |
-| `no-cache` | ✗ | `false` | Do not use cache when building the image |
-| `pull` | ✗ | `false` | Always attempt to pull a newer version of the base image |
+| `context` | ❌ | `.` | Build context path |
+| `dockerfile` | ❌ | `Dockerfile` | Path to Dockerfile |
+| `app-name` | ❌ | Repository name | Application name (automatically uses repository name if not provided) |
+| `tag` | ❌ | Auto-detected | Image tag (automatically determined from git ref/SHA if not provided) |
+| `image-name` | ❌ | - | Full image name with tag (e.g., `myapp:latest`). If provided, overrides `app-name` and `tag` |
+| `build-args` | ❌ | - | Build arguments in KEY=VALUE format, one per line |
+| `platforms` | ❌ | - | Target platforms for multi-platform builds (e.g., `linux/amd64,linux/arm64`) |
+| `cache-from` | ❌ | - | External cache sources (e.g., `type=registry,ref=user/app:cache`) |
+| `cache-to` | ❌ | - | Cache export destination (e.g., `type=registry,ref=user/app:cache,mode=max`) |
+| `push` | ❌ | `false` | Push the image after building (requires docker login) |
+| `load` | ❌ | `true` | Load the image into docker daemon (cannot be used with multi-platform builds) |
+| `labels` | ❌ | - | Image labels in KEY=VALUE format, one per line |
+| `target` | ❌ | - | Target build stage (for multi-stage builds) |
+| `no-cache` | ❌ | `false` | Do not use cache when building the image |
+| `pull` | ❌ | `false` | Always attempt to pull a newer version of the base image |
 
 ### Smart Defaults
 
@@ -292,5 +292,3 @@ This action works seamlessly with the IBM Cloud Container Registry action. See t
 ## License
 
 This project is licensed under the MIT License.
-
-# Made with Bob

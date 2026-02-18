@@ -1,5 +1,6 @@
 name: 'Docker Build Action'
 description: 'Build Docker images with support for multi-platform builds, build arguments, and caching'
+author: 'Bob'
 
 branding:
   icon: 'package'
@@ -16,9 +17,17 @@ inputs:
     required: false
     default: 'Dockerfile'
   
+  app-name:
+    description: 'Application name (defaults to repository name if not provided)'
+    required: false
+  
+  tag:
+    description: 'Image tag (defaults to commit SHA if not provided)'
+    required: false
+  
   image-name:
-    description: 'Name and tag for the built image (e.g., myapp:latest)'
-    required: true
+    description: 'Full image name with tag (e.g., myapp:latest). If provided, overrides app-name and tag.'
+    required: false
   
   build-args:
     description: 'Build arguments in KEY=VALUE format, one per line'
@@ -69,6 +78,14 @@ outputs:
     description: 'Full name of the built image'
     value: ${{ steps.build.outputs.image-name }}
   
+  app-name:
+    description: 'Application name used for the image'
+    value: ${{ steps.build.outputs.app-name }}
+  
+  tag:
+    description: 'Tag used for the image'
+    value: ${{ steps.build.outputs.tag }}
+  
   image-id:
     description: 'Image ID of the built image'
     value: ${{ steps.build.outputs.image-id }}
@@ -86,7 +103,6 @@ runs:
   steps:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-      #shell: bash
       
     - name: Build Docker image
       id: build
@@ -95,6 +111,8 @@ runs:
       env:
         BUILD_CONTEXT: ${{ inputs.context }}
         DOCKERFILE: ${{ inputs.dockerfile }}
+        APP_NAME: ${{ inputs.app-name }}
+        TAG: ${{ inputs.tag }}
         IMAGE_NAME: ${{ inputs.image-name }}
         BUILD_ARGS: ${{ inputs.build-args }}
         PLATFORMS: ${{ inputs.platforms }}
@@ -106,3 +124,8 @@ runs:
         TARGET: ${{ inputs.target }}
         NO_CACHE: ${{ inputs.no-cache }}
         PULL: ${{ inputs.pull }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_REF: ${{ github.ref }}
+        GITHUB_SHA: ${{ github.sha }}
+
+# Made with Bob

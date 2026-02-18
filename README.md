@@ -18,7 +18,9 @@ A comprehensive GitHub Action for building Docker images with support for multi-
 |-------|----------|---------|-------------|
 | `context` | No | `.` | Build context path |
 | `dockerfile` | No | `Dockerfile` | Path to Dockerfile |
-| `image-name` | Yes | - | Name and tag for the built image (e.g., `myapp:latest`) |
+| `app-name` | No | Repository name | Application name (automatically uses repository name if not provided) |
+| `tag` | No | Auto-detected | Image tag (automatically determined from git ref/SHA if not provided) |
+| `image-name` | No | - | Full image name with tag (e.g., `myapp:latest`). If provided, overrides `app-name` and `tag` |
 | `build-args` | No | - | Build arguments in KEY=VALUE format, one per line |
 | `platforms` | No | - | Target platforms for multi-platform builds (e.g., `linux/amd64,linux/arm64`) |
 | `cache-from` | No | - | External cache sources (e.g., `type=registry,ref=user/app:cache`) |
@@ -30,20 +32,79 @@ A comprehensive GitHub Action for building Docker images with support for multi-
 | `no-cache` | No | `false` | Do not use cache when building the image |
 | `pull` | No | `false` | Always attempt to pull a newer version of the base image |
 
+### Smart Defaults
+
+The action automatically determines the app name and tag if not provided:
+
+- **App Name**: Uses the repository name (e.g., `my-repo` from `owner/my-repo`)
+- **Tag**: Intelligently determined based on git context:
+  - Git tags (e.g., `v1.0.0`): Uses the tag name
+  - Main branch: Uses commit SHA
+  - Other branches: Uses branch name
+  - Fallback: Uses commit SHA or `latest`
+
 ## Outputs
 
 | Output | Description |
 |--------|-------------|
-| `image-name` | Full name of the built image |
+| `image-name` | Full name of the built image (e.g., `myapp:v1.0.0`) |
+| `app-name` | Application name used for the image |
+| `tag` | Tag used for the image |
 | `image-id` | Image ID of the built image |
 | `digest` | Image digest (if pushed) |
 | `metadata` | Build metadata in JSON format |
 
 ## Usage Examples
 
-### Basic Build
+### Simplest Build (Recommended)
 
-Build a simple Docker image:
+Build with automatic app name and tag detection:
+
+```yaml
+- name: Build Docker image
+  uses: ./docker-build-action
+```
+
+This will automatically:
+- Use the repository name as the app name
+- Determine the tag based on the git ref (tag name, branch name, or commit SHA)
+- Output: `<repo-name>:<auto-tag>`
+
+### Build with Custom App Name
+
+Override the app name while keeping automatic tag detection:
+
+```yaml
+- name: Build Docker image
+  uses: ./docker-build-action
+  with:
+    app-name: my-custom-app
+```
+
+### Build with Custom Tag
+
+Override the tag while using the repository name:
+
+```yaml
+- name: Build Docker image
+  uses: ./docker-build-action
+  with:
+    tag: v2.0.0
+```
+
+### Build with Both Custom App Name and Tag
+
+```yaml
+- name: Build Docker image
+  uses: ./docker-build-action
+  with:
+    app-name: my-custom-app
+    tag: v2.0.0
+```
+
+### Legacy: Full Image Name (Backward Compatible)
+
+For backward compatibility, you can still provide the full image name:
 
 ```yaml
 - name: Build Docker image
@@ -54,13 +115,12 @@ Build a simple Docker image:
 
 ### Build with Arguments
 
-Build with custom build arguments:
+Build with custom build arguments (using automatic naming):
 
 ```yaml
 - name: Build with arguments
   uses: ./docker-build-action
   with:
-    image-name: myapp:v1.0.0
     build-args: |
       NODE_VERSION=18
       APP_ENV=production
@@ -69,28 +129,27 @@ Build with custom build arguments:
 
 ### Multi-Platform Build
 
-Build for multiple platforms:
+Build for multiple platforms (using automatic naming):
 
 ```yaml
 - name: Multi-platform build
   uses: ./docker-build-action
   with:
-    image-name: myapp:latest
     platforms: linux/amd64,linux/arm64
     push: true
 ```
 
 ### Build with Caching
 
-Use registry caching for faster builds:
+Use registry caching for faster builds (using automatic naming):
 
 ```yaml
 - name: Build with cache
+  id: build
   uses: ./docker-build-action
   with:
-    image-name: myapp:latest
-    cache-from: type=registry,ref=myregistry/myapp:cache
-    cache-to: type=registry,ref=myregistry/myapp:cache,mode=max
+    cache-from: type=registry,ref=myregistry/${{ steps.build.outputs.app-name }}:cache
+    cache-to: type=registry,ref=myregistry/${{ steps.build.outputs.app-name }}:cache,mode=max
 ```
 
 ### Multi-Stage Build
@@ -101,25 +160,24 @@ Build a specific stage from a multi-stage Dockerfile:
 - name: Build production stage
   uses: ./docker-build-action
   with:
-    image-name: myapp:prod
+    tag: prod
     target: production
 ```
 
 ### Build with Labels
 
-Add custom labels to the image:
+Add custom labels to the image (automatic title from app name):
 
 ```yaml
 - name: Build with labels
   uses: ./docker-build-action
   with:
-    image-name: myapp:latest
     labels: |
-      org.opencontainers.image.title=MyApp
-      org.opencontainers.image.version=${{ github.ref_name }}
       org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
       org.opencontainers.image.revision=${{ github.sha }}
 ```
+
+Note: The action automatically adds `org.opencontainers.image.title` and `org.opencontainers.image.version` based on the app name and tag.
 
 ### Custom Dockerfile Location
 
@@ -131,7 +189,7 @@ Build using a Dockerfile in a different location:
   with:
     context: ./backend
     dockerfile: ./backend/Dockerfile.prod
-    image-name: myapp-backend:latest
+    app-name: myapp-backend
 ```
 
 ## Complete Workflow Example
@@ -152,10 +210,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: actions/checkout@v4
       
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -163,30 +218,25 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: myusername/myapp
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-      
       - name: Build and push
+        id: build
         uses: ./docker-build-action
         with:
-          image-name: ${{ steps.meta.outputs.tags }}
           platforms: linux/amd64,linux/arm64
           push: true
-          cache-from: type=registry,ref=myusername/myapp:cache
-          cache-to: type=registry,ref=myusername/myapp:cache,mode=max
-          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=myusername/${{ github.event.repository.name }}:cache
+          cache-to: type=registry,ref=myusername/${{ github.event.repository.name }}:cache,mode=max
           build-args: |
-            VERSION=${{ github.ref_name }}
             COMMIT_SHA=${{ github.sha }}
+      
+      - name: Display build info
+        run: |
+          echo "Built image: ${{ steps.build.outputs.image-name }}"
+          echo "App name: ${{ steps.build.outputs.app-name }}"
+          echo "Tag: ${{ steps.build.outputs.tag }}"
 ```
+
+Note: This simplified example uses automatic app name and tag detection, eliminating the need for the `docker/metadata-action`.
 
 ## Integration with IBM Cloud Container Registry
 
@@ -194,12 +244,14 @@ This action works seamlessly with the IBM Cloud Container Registry action. See t
 
 ## Best Practices
 
-1. **Use specific tags**: Avoid using `latest` in production
-2. **Enable caching**: Use registry caching for faster builds
-3. **Multi-platform builds**: Build for multiple architectures when needed
-4. **Build arguments**: Use build args for configuration, not secrets
-5. **Labels**: Add metadata labels for better image management
-6. **Layer optimization**: Order Dockerfile instructions from least to most frequently changing
+1. **Use automatic naming**: Let the action determine app name and tag from git context
+2. **Override when needed**: Use `app-name` or `tag` inputs for custom naming
+3. **Enable caching**: Use registry caching for faster builds
+4. **Multi-platform builds**: Build for multiple architectures when needed
+5. **Build arguments**: Use build args for configuration, not secrets
+6. **Labels**: Add metadata labels for better image management
+7. **Layer optimization**: Order Dockerfile instructions from least to most frequently changing
+8. **Use outputs**: Reference `steps.build.outputs.app-name` and `steps.build.outputs.tag` in subsequent steps
 
 ## Troubleshooting
 
@@ -224,5 +276,3 @@ This action works seamlessly with the IBM Cloud Container Registry action. See t
 ## License
 
 This project is licensed under the MIT License.
-
-# Made with Bob

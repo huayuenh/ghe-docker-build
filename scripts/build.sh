@@ -40,12 +40,64 @@ handle_error() {
 
 echo "::group::Building Docker image"
 
-# Validate required inputs
-if [ -z "$IMAGE_NAME" ]; then
-    handle_error 1 "image-name is required"
+# Resolve app name and tag
+RESOLVED_APP_NAME=""
+RESOLVED_TAG=""
+RESOLVED_IMAGE_NAME=""
+
+# If IMAGE_NAME is provided, use it directly (backward compatibility)
+if [ -n "$IMAGE_NAME" ]; then
+    RESOLVED_IMAGE_NAME="$IMAGE_NAME"
+    print_info "Using provided image name: $IMAGE_NAME"
+else
+    # Resolve app name
+    if [ -n "$APP_NAME" ]; then
+        RESOLVED_APP_NAME="$APP_NAME"
+        print_info "Using provided app name: $APP_NAME"
+    else
+        # Extract repository name from GITHUB_REPOSITORY (owner/repo)
+        if [ -n "$GITHUB_REPOSITORY" ]; then
+            RESOLVED_APP_NAME="${GITHUB_REPOSITORY##*/}"
+            print_info "Using repository name as app name: $RESOLVED_APP_NAME"
+        else
+            handle_error 1 "app-name is required when image-name is not provided and not running in GitHub Actions"
+        fi
+    fi
+    
+    # Resolve tag
+    if [ -n "$TAG" ]; then
+        RESOLVED_TAG="$TAG"
+        print_info "Using provided tag: $TAG"
+    else
+        # Determine tag based on git ref
+        if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            # Use tag name for releases
+            RESOLVED_TAG="${GITHUB_REF#refs/tags/}"
+            print_info "Using git tag: $RESOLVED_TAG"
+        elif [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            # Use commit SHA for main branch
+            RESOLVED_TAG="${GITHUB_SHA}"
+            print_info "Using commit SHA for main branch: $RESOLVED_TAG"
+        elif [[ "$GITHUB_REF" == refs/heads/* ]]; then
+            # Use branch name for other branches
+            RESOLVED_TAG="${GITHUB_REF#refs/heads/}"
+            print_info "Using branch name: $RESOLVED_TAG"
+        elif [ -n "$GITHUB_SHA" ]; then
+            # Fallback to commit SHA
+            RESOLVED_TAG="${GITHUB_SHA}"
+            print_info "Using commit SHA: $RESOLVED_TAG"
+        else
+            # Ultimate fallback
+            RESOLVED_TAG="latest"
+            print_warning "No tag information available, using 'latest'"
+        fi
+    fi
+    
+    # Construct full image name
+    RESOLVED_IMAGE_NAME="${RESOLVED_APP_NAME}:${RESOLVED_TAG}"
+    print_info "Constructed image name: $RESOLVED_IMAGE_NAME"
 fi
 
-print_info "Building Docker image: $IMAGE_NAME"
 print_info "Build context: $BUILD_CONTEXT"
 print_info "Dockerfile: $DOCKERFILE"
 
@@ -56,7 +108,7 @@ BUILD_CMD="docker buildx build"
 BUILD_CMD="$BUILD_CMD -f $DOCKERFILE"
 
 # Add image name/tag
-BUILD_CMD="$BUILD_CMD -t $IMAGE_NAME"
+BUILD_CMD="$BUILD_CMD -t $RESOLVED_IMAGE_NAME"
 
 # Add build arguments
 if [ -n "$BUILD_ARGS" ]; then
@@ -149,11 +201,19 @@ handle_error $? "Docker build failed"
 print_success "Docker image built successfully"
 
 # Set outputs
-echo "image-name=$IMAGE_NAME" >> $GITHUB_OUTPUT
+echo "image-name=$RESOLVED_IMAGE_NAME" >> $GITHUB_OUTPUT
+
+# Output app name and tag separately for convenience
+if [ -n "$RESOLVED_APP_NAME" ]; then
+    echo "app-name=$RESOLVED_APP_NAME" >> $GITHUB_OUTPUT
+fi
+if [ -n "$RESOLVED_TAG" ]; then
+    echo "tag=$RESOLVED_TAG" >> $GITHUB_OUTPUT
+fi
 
 # Get image ID if loaded
 if [ "$LOAD" = "true" ] && [ -z "$PLATFORMS" ]; then
-    IMAGE_ID=$(docker images -q "$IMAGE_NAME" 2>/dev/null || echo "")
+    IMAGE_ID=$(docker images -q "$RESOLVED_IMAGE_NAME" 2>/dev/null || echo "")
     if [ -n "$IMAGE_ID" ]; then
         print_info "Image ID: $IMAGE_ID"
         echo "image-id=$IMAGE_ID" >> $GITHUB_OUTPUT

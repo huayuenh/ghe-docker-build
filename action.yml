@@ -1,6 +1,5 @@
 name: 'Docker Build Action'
 description: 'Build Docker images with support for multi-platform builds, build arguments, and caching'
-author: 'Bob'
 
 branding:
   icon: 'package'
@@ -127,5 +126,3 @@ runs:
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_REF: ${{ github.ref }}
         GITHUB_SHA: ${{ github.sha }}
-
-# Made with Bob

@@ -243,5 +243,3 @@ fi
 echo "::endgroup::"
 
 print_success "Build completed successfully"
-
-# Made with Bob
